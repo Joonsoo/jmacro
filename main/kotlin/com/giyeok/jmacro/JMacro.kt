@@ -20,7 +20,7 @@ class JMacro(val builder: StringBuilder) {
         ctx
       }
 
-      is JMacroAst.ClassDecl -> {
+      is JMacroAst.ClassDecl, is JMacroAst.MacroDecl -> {
         // Do nothing
         ctx
       }
@@ -75,14 +75,14 @@ class JMacro(val builder: StringBuilder) {
       }
     }
 
-  fun writeValue(value: MacroValue, ast: JMacroAst.AstNode) {
+  fun writeValue(value: Value, ast: JMacroAst.AstNode) {
     if (value !is SnipValue)
       throw IllegalStateException("Not snip $ast")
     builder.append(value.value)
   }
 
   companion object {
-    fun evaluate(expr: JMacroAst.Expr, ctx: MacroCtx): MacroValue {
+    fun evaluate(expr: JMacroAst.Expr, ctx: MacroCtx): Value {
       return when (expr) {
         is JMacroAst.Call -> {
           val callee = when (val callee = expr.callee) {
@@ -99,7 +99,7 @@ class JMacro(val builder: StringBuilder) {
                   field.first to value
                 }
                 var currentCtx = ctx.withNames(fields)
-                val elems = mutableMapOf<String, MacroValue>()
+                val elems = mutableMapOf<String, Value>()
                 for ((name, elemExpr) in cls.elems) {
                   val value = evaluate(elemExpr, currentCtx)
                   elems[name] = value
@@ -107,6 +107,23 @@ class JMacro(val builder: StringBuilder) {
                 }
                 return ClassValue(fields + elems)
               }
+
+              val macro = ctx.macros[callee.name]
+              if (macro != null) {
+                val args = expr.args.map { evaluate(it, ctx) }
+                if (macro.params.size != args.size) {
+                  throw IllegalStateException("TODO msg")
+                }
+                // TODO type check
+                val fields = macro.params.zip(args).associate { (field, value) ->
+                  field.first to value
+                }
+
+                val builder = StringBuilder()
+                JMacro(builder).write(macro.body, ctx.withNames(fields))
+                return SnipValue(builder.toString())
+              }
+
               evaluate(expr.callee, ctx)
             }
           }
@@ -144,7 +161,8 @@ class JMacro(val builder: StringBuilder) {
         }
 
         is JMacroAst.Name -> {
-          ctx.names[expr.name] ?: throw IllegalStateException("Name not found: ${expr.name}")
+          ctx.names[expr.name]
+            ?: throw IllegalStateException("Name not found: ${expr.name}")
         }
 
         is JMacroAst.Paren -> evaluate(expr.body, ctx)

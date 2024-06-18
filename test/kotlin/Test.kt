@@ -23,7 +23,7 @@ class Test {
       """.trimIndent()
     )
     val builder = StringBuilder()
-    JMacro(builder).write(parsed, MacroCtx(mapOf(), mapOf()))
+    JMacro(builder).write(parsed, MacroCtx.initFor(parsed))
     println(builder.toString())
   }
 
@@ -31,7 +31,15 @@ class Test {
   fun test2() {
     val parsed = JMacroParser.parse(Path("examples/example.ktm").readText())
     val builder = StringBuilder()
-    JMacro(builder).write(parsed, MacroCtx(MacroCtx.findClassDefs(parsed), mapOf()))
+    JMacro(builder).write(parsed, MacroCtx.initFor(parsed))
+    println(builder.toString())
+  }
+
+  @Test
+  fun test3() {
+    val parsed = JMacroParser.parse(Path("examples/macro.ktm").readText())
+    val builder = StringBuilder()
+    JMacro(builder).write(parsed, MacroCtx.initFor(parsed))
     println(builder.toString())
   }
 }

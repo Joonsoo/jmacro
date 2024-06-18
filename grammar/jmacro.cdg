@@ -6,13 +6,19 @@ PlainSnip = <(.-'#')+ {PlainSnip(snip=str($0))}>
 
 SharpEscape = "##" {SharpEscape()}
 
-MacroDirective: MacroDirective = ClassDecl | ForDirective | LetDirective | MacroNameReplace | ExprReplace
+MacroDirective: MacroDirective = ClassDecl | MacroDecl | ForDirective | LetDirective | MacroNameReplace | ExprReplace
 
 ClassDecl
-  = "#class" WS Name WS '(' WS ClassParam (WS ',' WS ClassParam)* WS ')' WS_NO_NL '{' (WS ClassElem (Delim ClassElem)*)? WS '}'
-    {ClassDecl(name=$2, fields=[$6] + $7, elems=$12{[$1] + $2} ?: [])}
+  = "#class" WS Name WS Params WS_NO_NL '{' (WS ClassElem (Delim ClassElem)*)? WS '}'
+    {ClassDecl(name=$2, fields=$4, elems=$7{[$1] + $2} ?: [])}
 
-ClassParam = Name (WS ':' WS Type)? {ClassParam(name=$0, type=$1)}
+MacroDecl
+  = "#macro" WS Name WS Params MacroBody "#end"
+    {MacroDecl(name=$2, params=$4, body=$5)}
+
+Params = '(' WS Param (WS ',' WS Param)* WS ')' {[$2] + $3}
+Param = Name (WS ':' WS Type)? {Param(name=$0, type=$1)}
+
 ClassElem = Name WS '=' WS Expr {ClassElem(name=$0, body=$4)}
 
 Type: Type = Name | FuncType | ArrayType | TupleType

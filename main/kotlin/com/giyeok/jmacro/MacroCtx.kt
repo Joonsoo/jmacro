@@ -1,11 +1,12 @@
 package com.giyeok.jmacro
 
 data class MacroCtx(
-  val classes: Map<String, MacroClass>,
-  val names: Map<String, MacroValue>
+  val classes: Map<String, ClassDef>,
+  val macros: Map<String, MacroDef>,
+  val names: Map<String, Value>
 ) {
   companion object {
-    fun findClassDefs(ast: JMacroAst.MacroBody): Map<String, MacroClass> {
+    fun findClassDefs(ast: JMacroAst.MacroBody): Map<String, ClassDef> {
       val clsDefs = ast.elems.filterIsInstance<JMacroAst.ClassDecl>()
       val clsNames = clsDefs.map { it.name.name }.toSet()
       return clsDefs.associate { cls ->
@@ -15,39 +16,61 @@ data class MacroCtx(
         val elems = cls.elems?.associate { elem ->
           elem.name.name to elem.body
         }
-        val clsDef = MacroClass(cls.name.name, fields, elems ?: mapOf())
+        val clsDef = ClassDef(cls.name.name, fields, elems ?: mapOf())
         cls.name.name to clsDef
       }
     }
+
+    fun findMacros(clsNames: Set<String>, ast: JMacroAst.MacroBody): Map<String, MacroDef> {
+      val macroDefs = ast.elems.filterIsInstance<JMacroAst.MacroDecl>()
+      return macroDefs.associate { macro ->
+        val params = macro.params.map { param ->
+          param.name.name to (param.type?.let { compileType(it, clsNames) } ?: SnipType)
+        }
+        macro.name.name to MacroDef(macro.name.name, params, macro.body)
+      }
+    }
+
+    fun initFor(ast: JMacroAst.MacroBody): MacroCtx {
+      val cls = findClassDefs(ast)
+      val macros = findMacros(cls.keys, ast)
+      return MacroCtx(cls, macros, mapOf())
+    }
   }
 
-  fun withName(pair: Pair<String, MacroValue>): MacroCtx =
-    MacroCtx(classes, names + pair)
+  fun withName(pair: Pair<String, Value>): MacroCtx =
+    copy(names = names + pair)
 
-  fun withNames(map: Map<String, MacroValue>): MacroCtx =
-    MacroCtx(classes, names + map)
+  fun withNames(map: Map<String, Value>): MacroCtx =
+    copy(names = names + map)
 }
 
-data class MacroClass(
+data class ClassDef(
   val name: String,
   val fields: List<Pair<String, MacroType>>,
   val elems: Map<String, JMacroAst.Expr>
 )
 
-sealed class MacroValue
+data class MacroDef(
+  val name: String,
+  val params: List<Pair<String, MacroType>>,
+  val body: JMacroAst.MacroBody
+)
 
-data class ClassValue(val fields: Map<String, MacroValue>): MacroValue()
+sealed class Value
 
-data class SnipValue(val value: String): MacroValue()
+data class ClassValue(val fields: Map<String, Value>): Value()
 
-data class ArrayValue(val elems: List<MacroValue>): MacroValue()
-data class TupleValue(val elems: List<MacroValue>): MacroValue()
+data class SnipValue(val value: String): Value()
+
+data class ArrayValue(val elems: List<Value>): Value()
+data class TupleValue(val elems: List<Value>): Value()
 
 data class FuncValue(
   val params: List<String>,
   val bodyExpr: JMacroAst.Expr,
   val outerCtx: MacroCtx
-): MacroValue()
+): Value()
 
 sealed class MacroType
 

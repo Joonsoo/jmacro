@@ -26,7 +26,7 @@ class BibixPopulate {
     val parsed = JMacroParser.parse(src)
 
     val builder = StringBuilder()
-    JMacro(builder).write(parsed, MacroCtx(MacroCtx.findClassDefs(parsed), values))
+    JMacro(builder).write(parsed, MacroCtx.initFor(parsed))
     val outfile = outname ?: file.name
 
     val outpath = context.clearDestDirectory().resolve(outfile)
