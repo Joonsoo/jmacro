@@ -1,0 +1,91 @@
+MacroBody = MacroElem* {MacroBody(elems=$0)}
+
+MacroElem: MacroElem = PlainSnip | SharpEscape | MacroDirective
+
+PlainSnip = <(.-'#')+ {PlainSnip(snip=str($0))}>
+
+SharpEscape = "##" {SharpEscape()}
+
+MacroDirective: MacroDirective = ClassDecl | ForDirective | LetDirective | MacroNameReplace | ExprReplace
+
+ClassDecl
+  = "#class" WS Name WS '(' WS ClassParam (WS ',' WS ClassParam)* WS ')' WS_NO_NL '{' (WS ClassElem (Delim ClassElem)*)? WS '}'
+    {ClassDecl(name=$2, fields=[$6] + $7, elems=$12{[$1] + $2} ?: [])}
+
+ClassParam = Name (WS ':' WS Type)? {ClassParam(name=$0, type=$1)}
+ClassElem = Name WS '=' WS Expr {ClassElem(name=$0, body=$4)}
+
+Type: Type = Name | FuncType | ArrayType | TupleType
+FuncType = '(' (WS Type (WS ',' WS Type)*)? WS ')' WS "->" WS Type {FuncType(params=$1{[$1] + $2} ?: [], result=$7)}
+ArrayType = Type WS "[]" {ArrayType(elem=$0)}
+TupleType = '(' WS Type (WS ',' WS Type)+ WS ')' {TupleType(elems=[$2] + $3)}
+
+ForDirective
+  = "#for" WS '(' WS ExtractPattern WS "in"&Tk WS Expr WS ')' MacroBody "#end"
+    {ForDirective(iterName=$4, iterOver=$8, body=$11)}
+
+ExtractPattern: ExtractPattern = Name | '(' WS Name (WS ',' WS Name)* WS ')' {ExtractTuple(elems=[$2] + $3)}
+
+LetDirective = "#let" WS Name (WS ':' WS Type)? WS '=' WS Expr {LetDirective(name=$2, type=$3, value=$7)}
+
+MacroNameReplace = '#' Name {NameReplace(name=$1)}
+
+ExprReplace = '#' '{' WS Expr WS '}' {ExprReplace(expr=$3)}
+
+
+Expr: Expr = CallOr
+
+CallOr: CallOr = Primary
+  | Callee WS '(' (WS Args)? WS ')' {Call(callee=$0, args=$3 ?: [])}
+Callee: Callee<Expr> = Name | MemberAccess
+
+Args = Expr (WS ',' WS Expr)* {[$0] + $1}
+
+Primary: Primary = SnipExpr
+  | Name
+  | Lambda
+  | ArrayExpr
+  | TupleExpr
+  | '(' WS Expr WS ')' {Paren(body=$2)}
+  | MemberAccess
+
+Lambda
+  = '(' (WS LambdaParam (WS ',' WS LambdaParam)*)? WS ')' WS "->" WS Expr
+    {Lambda(params=$1{[$1] + $2} ?: [], body=$7)}
+LambdaParam: LambdaParam = Name | Name WS ':' WS Type {TypedParam(name=$0, type=$4)}
+
+ArrayExpr = '[' (WS Expr (WS ',' WS Expr)* (WS ',')?)? WS ']' {ArrayExpr(elems=$1{[$1] + $2} ?: [])}
+TupleExpr = '(' WS Expr (WS ',' WS Expr)+ WS ')' {TupleExpr(elems=[$2] + $3)}
+MemberAccess = Primary WS '.' WS Name {MemberAccess(value=$0, name=$4)}
+
+SnipExpr = '`' SnipElem* '`' {SnipExpr(elems=$1)}
+SnipElem: SnipElem = InnerSnipElem | InnerSnipEscape | InnerSnipMacroDirective
+InnerSnipElem = <(.-'#`')+ {InnerSnipElem(snip=str($0))}>
+InnerSnipEscape = "##" {InnerSnipEscape(value="#")} | "#`" {InnerSnipEscape("`")}
+InnerSnipMacroDirective: InnerSnipMacroDirective = MacroNameReplace | ExprReplace
+
+
+
+
+
+Delim = WS ',' WS | WS_NO_NL NL WS
+StmtDelim = WS ';' WS | WS_NO_NL NL WS
+
+Name = <'a-zA-Z_' '0-9a-zA-Z_'* {str($0, $1)}>-Keyword {Name(name=$0)}
+
+Keyword = "class" | "let" | "for" | "end"
+
+WS = (' \n\r\t' | Comment)*
+WS_NO_NL = (' \r\t' | BlockComment)*
+Comment = LineComment | BlockComment
+LineComment = "//" (.-'\n')* ('\n' | EOF)
+EOF = !.
+BlockComment = "/*" ((. !"*/")* .)? "*/"
+
+TrailingWS = <' \t'+>?
+
+NL = '\n'
+Tk = <'a-zA-Z0-9_'+>
+OpTk = <"!=" | "%" | "&" | "&&" | "*" | "+" | "-" | "/" | "<" | "<<" | "<=" | "=" | "==" | ">" | ">=" | ">>" | "^"
+  | "as" | "|" | "||" | "!" | "~" | ".." | "..<" | "in" | "!in"
+  | "+=" | "-=" | "*=" | "/=" | "%=" | "?:">

@@ -1,0 +1,66 @@
+from bibix.plugins import ktjvm
+import git("https://github.com/Joonsoo/jparser.git") as jparser
+import file
+import maven
+
+parser {
+  parserGen = jparser.genKtAstMgroup2(
+    cdgFile = "grammar/jmacro.cdg",
+    astifierClassName = "com.giyeok.jmacro.JMacroAst",
+    parserDataFileName = "jmacro-mg2-parserdata.pb",
+  )
+
+  action generate {
+    file.clearDirectory("parser/generated/resources")
+    file.clearDirectory("parser/generated/kotlin")
+    file.copyDirectory(parserGen.srcsRoot, "parser/generated/kotlin")
+    file.copyFile(parserGen.parserData, "parser/generated/resources")
+  }
+ 
+  generated = ktjvm.library(
+    srcs = glob("parser/generated/kotlin/**.kt"),
+    deps = [jparser.ktparser.main],
+    resources = ["parser/generated/resources/jmacro-mg2-parserdata.pb"]
+  )
+
+  main = ktjvm.library(
+    srcs = glob("parser/main/kotlin/**.kt"),
+    deps = [generated],
+  )
+}
+
+main = ktjvm.library(
+  srcs = glob("main/kotlin/**.kt"),
+  deps = [parser.main],
+)
+
+test = ktjvm.library(
+  srcs = glob("test/kotlin/**.kt"),
+  deps = [main, ...testDeps],
+)
+
+truthVersion = "1.4.2"
+truthDeps = [
+  maven.artifact("com.google.truth", "truth", truthVersion),
+  maven.artifact("com.google.truth.extensions", "truth-proto-extension", truthVersion),
+]
+
+testDeps = [
+  // maven.artifact("junit", "junit", "4.12"),
+  maven.artifact("org.junit.jupiter", "junit-jupiter-api", "5.8.2"),
+  ...truthDeps,
+]
+
+
+bibixImpl = ktjvm.library(
+  srcs = glob("bibixImpl/kotlin/**.kt"),
+  deps = [bibix.base, main],
+)
+
+def populate(
+  file: file,
+  outname?: string,
+  values?: list<(string, string)>,
+): file = bibixImpl:com.giyeok.jmacro.BibixPopulate
+
+bbxTest = populate("examples/example.ktm", "example.kt", [("a", "b")])
